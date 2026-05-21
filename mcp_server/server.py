@@ -8,6 +8,8 @@ This file does not contain OpenWeatherMap logic. It only adapts the reusable
 functions from `weather_api.py` into MCP tools.
 """
 
+import logging
+
 from mcp.server.fastmcp import FastMCP
 
 from mcp_server.weather_api import (
@@ -15,6 +17,11 @@ from mcp_server.weather_api import (
     get_weather_forecast as fetch_weather_forecast,
 )
 
+
+# FastMCP logs protocol request messages to stderr by default. That is useful
+# while debugging the server directly, but it makes the terminal chat noisy once
+# the CLI uses this server behind the scenes.
+logging.getLogger("mcp").setLevel(logging.WARNING)
 
 # FastMCP is the beginner-friendly server class from the Python MCP SDK.
 # The name helps MCP clients identify this server when they connect to it.

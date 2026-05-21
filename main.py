@@ -1,3 +1,5 @@
+import asyncio
+
 from dotenv import load_dotenv
 
 
@@ -45,14 +47,14 @@ def missing_key(value: str, placeholder: str) -> bool:
     return not value or value == placeholder
 
 
-def main() -> None:
+async def main() -> None:
     """Start the command-line weather agent.
 
     This is the main control center of the app:
     1. Load API keys from `.env`.
     2. Import configuration and the agent class.
     3. Check that required keys exist.
-    4. Create one `WeatherAgent`.
+    4. Create one LangChain/MCP weather agent.
     5. Repeatedly read user input and ask the agent to answer.
     """
     # Load `.env` before importing config-dependent modules.
@@ -64,9 +66,10 @@ def main() -> None:
     load_dotenv()
 
     # These imports are intentionally inside `main()` and after `load_dotenv()`.
-    # `WeatherAgent` imports `config.py`, and `config.py` reads the API keys.
-    # This keeps the request/response flow configured before the agent starts.
-    from agent.agent import WeatherAgent
+    # `LangChainMCPWeatherAgent` imports `config.py`, and `config.py` reads the
+    # API keys. This keeps the request/response flow configured before the
+    # agent starts.
+    from agent.agent import LangChainMCPWeatherAgent
     from config import (
         OPENAI_API_KEY,
         OPENWEATHER_API_KEY,
@@ -97,10 +100,10 @@ def main() -> None:
         return
 
     # Create the AI agent object once. It stores:
-    # - an OpenAI client for talking to the model
-    # - the model name
-    # - the tool/function schema that tells the model a weather function exists
-    agent = WeatherAgent()
+    # - a LangChain chat model for talking to OpenAI
+    # - an MCP client that can launch the weather MCP server over stdio
+    # - in-memory conversation history for this terminal session
+    agent = LangChainMCPWeatherAgent()
 
     # This infinite loop keeps the command-line chat running until the user
     # types "quit" or "exit". Each loop iteration handles one user message.
@@ -124,10 +127,11 @@ def main() -> None:
 
         try:
             # This is the important handoff from the command-line interface to
-            # the agent architecture. `agent.run()` sends the user's text to
-            # the LLM, handles any tool call, and returns a final string.
-            debug_print("main.py is handing the input to WeatherAgent.run()")
-            response = agent.run(user_input)
+            # the agent architecture. `agent.arun()` sends the user's text to
+            # the LangChain agent, which can call MCP tools and return a final
+            # natural-language answer.
+            debug_print("main.py is handing the input to LangChainMCPWeatherAgent.arun()")
+            response = await agent.arun(user_input)
         except Exception as exc:
             # `except Exception as exc` catches unexpected runtime errors so
             # the beginner-facing app does not crash with a long traceback.
@@ -144,4 +148,4 @@ def main() -> None:
 # If another file imports `main.py`, the functions become available but the
 # chat loop does not start automatically.
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
