@@ -9,3 +9,10 @@ requests
 
 # Official Model Context Protocol SDK used by `mcp_server/server.py`.
 mcp
+
+# LangChain agent framework and OpenAI chat model integration.
+langchain
+langchain-openai
+
+# Adapter that turns MCP server tools into LangChain tools.
+langchain-mcp-adapters

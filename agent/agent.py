@@ -2,7 +2,15 @@
 # - JSON text, which APIs and LLM tool calls often use
 # - Python values, such as dictionaries and strings
 import json
+import os
+import sys
 from typing import Any
+
+# LangChain's `create_agent` builds a simple tool-calling agent for us.
+from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_openai import ChatOpenAI
 
 # `OpenAI` is the official client class from the `openai` package.
 # It knows how to send HTTP requests to OpenAI's API and return Python objects.
@@ -18,6 +26,103 @@ from agent.tools import get_current_weather, get_weather_forecast
 
 # Configuration values come from environment variables loaded in `main.py`.
 from config import OPENAI_API_KEY, OPENAI_MODEL, debug_print
+
+
+class LangChainMCPWeatherAgent:
+    """A LangChain agent that discovers weather tools from the MCP server.
+
+    This class is intentionally separate from `WeatherAgent` below. The current
+    CLI still uses `WeatherAgent`, while this class is the next learning step:
+    LangChain loads tools from the local MCP server instead of calling
+    `agent/tools.py` directly.
+    """
+
+    def __init__(self):
+        """Prepare the MCP client and in-memory conversation history."""
+        # The MCP client starts `python -m mcp_server.server` as a child process
+        # and talks to it over stdio. This mirrors how a local MCP-aware app
+        # would discover and call tools without running a web server.
+        self.mcp_client = MultiServerMCPClient(
+            {
+                "weather": {
+                    "transport": "stdio",
+                    "command": sys.executable,
+                    "args": ["-m", "mcp_server.server"],
+                    "env": os.environ.copy(),
+                }
+            }
+        )
+
+        # `ChatOpenAI` is LangChain's wrapper around OpenAI chat models.
+        self.model = ChatOpenAI(
+            model=OPENAI_MODEL,
+            api_key=OPENAI_API_KEY,
+        )
+
+        # Conversation memory stays in this Python object only. It is not saved
+        # to a file or database, so it resets whenever the process exits.
+        self.messages = []
+
+        self.tools = None
+        self.agent = None
+
+    async def load_mcp_tools(self) -> list:
+        """Load LangChain-compatible tools from the MCP weather server."""
+        if self.tools is None:
+            self.tools = await self.mcp_client.get_tools()
+            debug_print(
+                "LangChain MCP agent loaded tools",
+                [tool.name for tool in self.tools],
+            )
+
+        return self.tools
+
+    async def _get_agent(self):
+        """Create the LangChain agent after MCP tools are available."""
+        if self.agent is None:
+            tools = await self.load_mcp_tools()
+            self.agent = create_agent(
+                model=self.model,
+                tools=tools,
+                system_prompt=SYSTEM_PROMPT,
+            )
+            debug_print("LangChain MCP agent initialized")
+
+        return self.agent
+
+    async def arun(self, user_input: str) -> str:
+        """Answer one user message using LangChain and MCP tools.
+
+        Parameter:
+        - user_input: a weather question, such as "What is the weather in Austin?"
+
+        Return value:
+        - A natural-language answer from the LangChain agent.
+        """
+        agent = await self._get_agent()
+
+        # LangChain message objects make the in-memory history explicit and
+        # beginner-friendly: human messages come from the user, AI messages come
+        # from the model, and tool messages are added by LangChain during a run.
+        self.messages.append(HumanMessage(content=user_input))
+        response = await agent.ainvoke({"messages": self.messages})
+
+        # The agent returns the full updated message list, including any MCP
+        # tool calls and tool results. Keeping it lets follow-up questions use
+        # the short-term memory from this process.
+        self.messages = response["messages"]
+
+        final_message = self.messages[-1]
+        if isinstance(final_message, AIMessage):
+            return final_message.content or "I could not create a weather summary."
+
+        return str(getattr(final_message, "content", final_message))
+
+    def run(self, user_input: str) -> str:
+        """Synchronous wrapper for scripts that are not already using asyncio."""
+        import asyncio
+
+        return asyncio.run(self.arun(user_input))
 
 
 class WeatherAgent:
