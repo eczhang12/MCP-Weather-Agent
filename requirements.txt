@@ -1,10 +1,7 @@
-# Official OpenAI Python client used by `agent/agent.py` to call the LLM.
-openai
-
 # Loads API keys from a local `.env` file into environment variables.
 python-dotenv
 
-# HTTP client used by `agent/tools.py` to call the OpenWeatherMap API.
+# HTTP client used by `mcp_server/weather_api.py` to call OpenWeatherMap.
 requests
 
 # Official Model Context Protocol SDK used by `mcp_server/server.py`.

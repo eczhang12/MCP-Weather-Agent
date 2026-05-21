@@ -194,9 +194,8 @@ def get_current_weather(location: str) -> dict:
       explanation.
 
     How this fits the architecture:
-    This function contains reusable weather API behavior. Today the CLI agent
-    imports it through `agent/tools.py`; later, an MCP server can expose the
-    same function as an MCP tool without duplicating the OpenWeatherMap logic.
+    This function contains reusable weather API behavior. The MCP server exposes
+    this same function as a tool without duplicating the OpenWeatherMap logic.
     """
     onecall_result = _get_onecall_weather(
         location,

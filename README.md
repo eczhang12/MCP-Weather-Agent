@@ -204,9 +204,6 @@ functions as MCP tools over stdio.
 geocodes a city name, calls One Call API 3.0, normalizes the JSON response, and
 returns beginner-friendly dictionaries.
 
-`agent/tools.py` remains as a small compatibility wrapper around the reusable
-weather functions.
-
 ## Debug Mode
 
 Set this in `.env`:
