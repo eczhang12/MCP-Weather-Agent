@@ -6,3 +6,6 @@ python-dotenv
 
 # HTTP client used by `agent/tools.py` to call the OpenWeatherMap API.
 requests
+
+# Official Model Context Protocol SDK used by `mcp_server/server.py`.
+mcp

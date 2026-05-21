@@ -1,5 +1,20 @@
 # Weather-Agent
-A test-run of creating an AI agent with weather API integration.
+A beginner-friendly weather agent learning project.
+
+The project currently has two runnable pieces:
+
+1. A command-line weather chat agent in `main.py`.
+2. A local MCP server in `mcp_server/server.py` that exposes the same weather
+   functions as MCP tools.
+
+The OpenWeatherMap API logic lives in one reusable module:
+
+```text
+mcp_server/weather_api.py
+```
+
+Both the existing CLI tool wrapper and the MCP server use that module, so the
+weather behavior stays in one place.
 
 ## Setup
 
@@ -37,6 +52,57 @@ Run the container:
 ```bash
 docker run --env-file .env -it weather-agent
 ```
+
+This starts the original command-line chat agent.
+
+## MCP Server
+
+MCP stands for Model Context Protocol. It is a standard way for AI applications
+to discover and call external tools.
+
+In this project, the MCP server exposes the weather functions as tools:
+
+1. `get_current_weather(location: str)`
+2. `get_weather_forecast(location: str, days: int = 7, target_day_offset: int | None = None)`
+
+These MCP tools call the reusable functions in `mcp_server/weather_api.py`. They
+do not duplicate the OpenWeatherMap code.
+
+Run the MCP server in Docker:
+
+```bash
+docker run --env-file .env -it weather-agent python -m mcp_server.server
+```
+
+The MCP server uses stdio transport. Stdio means the MCP client starts this
+Python process and communicates with it through standard input and output. That
+keeps local development simple because there is no web server, port, or network
+setup to manage.
+
+When you run the server by itself, it may look like it is waiting. That is
+normal: stdio MCP servers wait for an MCP client to connect and send protocol
+messages.
+
+Smoke-test Python compilation in Docker:
+
+```bash
+docker run --env-file .env -it weather-agent python -m compileall .
+```
+
+Confirm the MCP server registered both tools:
+
+```bash
+docker run --env-file .env weather-agent python -c "import asyncio; from mcp_server.server import mcp; print([tool.name for tool in asyncio.run(mcp.list_tools())])"
+```
+
+Expected output:
+
+```text
+['get_current_weather', 'get_weather_forecast']
+```
+
+LangChain and LangGraph are not integrated yet. The next learning step is to
+load these MCP tools into a LangChain/LangGraph agent.
 
 ## Verbose Debug Mode
 
@@ -206,18 +272,36 @@ the model understand that the weather data is the answer to its own tool request
 
 ### Available Weather Tools
 
-The agent currently has two tools:
+The reusable weather API currently has two public functions:
 
 1. `get_current_weather(location)`
    - Use this for current or live weather.
    - Example: `What is the weather in Austin?`
 
-2. `get_weather_forecast(location, days)`
+2. `get_weather_forecast(location, days, target_day_offset=None)`
    - Use this for future weather and daily forecasts.
    - The `days` value must be from 1 to 8.
+   - `target_day_offset` can select one specific day, where `0` means today,
+     `1` means tomorrow, and `7` means seven days from now.
    - Example: `Give me a 5 day forecast for Chicago.`
 
 The current weather and forecast tools use OpenWeatherMap One Call API 3.0.
 Because One Call requires latitude and longitude, the app first uses
 OpenWeatherMap's Geocoding API to convert a city name into coordinates. The One
 Call daily forecast provides up to 8 days of forecast data.
+
+### Current File Layout
+
+```text
+main.py
+  -> agent/agent.py
+  -> agent/tools.py
+  -> mcp_server/weather_api.py
+
+mcp_server/server.py
+  -> mcp_server/weather_api.py
+```
+
+`agent/tools.py` is now a thin compatibility wrapper. It keeps the current CLI
+agent working while allowing `mcp_server/server.py` to expose the same reusable
+weather functions through MCP.
